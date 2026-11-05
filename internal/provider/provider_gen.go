@@ -31,6 +31,8 @@ func (p *OpenAIProvider) Resources(ctx context.Context) []func() resource.Resour
 		NewSpendLimitResource,
 		NewUserRoleResource,
 		NewUserRoleAssignmentResource,
+		NewWorkloadIdentityProviderResource,
+		NewWorkloadIdentityFederationRuleResource,
 	}
 }
 

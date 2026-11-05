@@ -1,0 +1,1 @@
+terraform import openai_workload_identity_federation_rule.ci wip_example/wifr_example
