@@ -845,6 +845,8 @@ func (p *OpenAIProvider) Resources(ctx context.Context) []func() resource.Resour
       .sort((a, b) => a.name.localeCompare(b.name))
       .map((resource) => `New${camelize(resource.name)}Resource,`)
       .join("\n")}
+        NewWorkloadIdentityProviderResource,
+        NewWorkloadIdentityFederationRuleResource,
 	}
 }
 

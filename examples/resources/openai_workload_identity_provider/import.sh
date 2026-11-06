@@ -1,0 +1,1 @@
+terraform import openai_workload_identity_provider.github wip_example
