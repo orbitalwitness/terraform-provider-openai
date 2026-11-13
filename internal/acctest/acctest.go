@@ -38,7 +38,9 @@ func init() {
 		option.WithDebugLog(tflog.StandardLogger(context.Background())),
 	))
 
-	TestGroupId = ensureTestGroupId(context.Background())
+	if TestAdminKey != "" {
+		TestGroupId = ensureTestGroupId(context.Background())
+	}
 }
 
 func PreCheck(t *testing.T) {
