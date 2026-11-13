@@ -1,0 +1,59 @@
+Local plan with a development build, dummy admin credential and empty local state; no vendor API calls or apply.
+
+Terraform used the selected providers to generate the following execution
+plan. Resource actions are indicated with the following symbols:
+  + create
+
+Terraform will perform the following actions:
+
+  # openai_group.runtime will be created
+  + resource "openai_group" "runtime" {
+      + created_at = (known after apply)
+      + id         = (known after apply)
+      + name       = "preprod-inference-runtime"
+    }
+
+  # openai_group_user.runtime will be created
+  + resource "openai_group_user" "runtime" {
+      + group_id = (known after apply)
+      + user_id  = (known after apply)
+    }
+
+  # openai_project_group_role_assignment.inference will be created
+  + resource "openai_project_group_role_assignment" "inference" {
+      + group_id   = (known after apply)
+      + project_id = "proj_example"
+      + role_id    = (known after apply)
+    }
+
+  # openai_project_role.inference will be created
+  + resource "openai_project_role" "inference" {
+      + description = "Inference without account, billing or organisation administration"
+      + id          = (known after apply)
+      + name        = "preprod-inference-inference"
+      + permissions = [
+          + "api.decisions.write",
+          + "api.model.request",
+          + "api.responses.write",
+        ]
+      + project_id  = "proj_example"
+    }
+
+  # openai_project_service_account.runtime will be created
+  + resource "openai_project_service_account" "runtime" {
+      + api_key                     = (sensitive value)
+      + api_key_id                  = (known after apply)
+      + create_service_account_only = true
+      + created_at                  = (known after apply)
+      + id                          = (known after apply)
+      + name                        = "preprod-inference"
+      + project_id                  = "proj_example"
+      + role                        = (known after apply)
+    }
+
+Plan: 5 to add, 0 to change, 0 to destroy.
+
+Changes to Outputs:
+  + service_account_id = (known after apply)
+
+─────────────────────────────────────────────────────────────────────────────

@@ -7,16 +7,20 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/jianyuan/terraform-provider-openai/internal/tfutils"
 	"github.com/openai/openai-go/v3"
 	supertypes "github.com/orange-cloudavenue/terraform-plugin-framework-supertypes"
 )
 
 var _ resource.Resource = &ProjectServiceAccountResource{}
+var _ resource.ResourceWithImportState = &ProjectServiceAccountResource{}
 
 func NewProjectServiceAccountResource() resource.Resource {
 	return &ProjectServiceAccountResource{}
@@ -43,11 +47,18 @@ func (r *ProjectServiceAccountResource) Schema(ctx context.Context, req resource
 				},
 			},
 			"name": schema.StringAttribute{
-				MarkdownDescription: "The name of the service account being created.",
+				MarkdownDescription: "The name of the service account. Updated in place.",
 				Required:            true,
 				CustomType:          supertypes.StringType{},
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.RequiresReplace(),
+			},
+			"create_service_account_only": schema.BoolAttribute{
+				MarkdownDescription: "Create without a default project role or API key. Defaults to false for compatibility. Changing this creation mode requires replacement; the API cannot update a built-in role to none. Refresh fails if a role-free account acquires a built-in role.",
+				Optional:            true,
+				Computed:            true,
+				CustomType:          supertypes.BoolType{},
+				PlanModifiers: []planmodifier.Bool{
+					boolplanmodifier.UseStateForUnknown(),
+					boolplanmodifier.RequiresReplace(),
 				},
 			},
 			"id": schema.StringAttribute{
@@ -59,7 +70,7 @@ func (r *ProjectServiceAccountResource) Schema(ctx context.Context, req resource
 				},
 			},
 			"role": schema.StringAttribute{
-				MarkdownDescription: "The role of the service account. Can be `owner` or `member`.",
+				MarkdownDescription: "The role of the service account. Can be `owner`, `member`, or `none`. Custom roles are managed separately.",
 				Computed:            true,
 				CustomType:          supertypes.StringType{},
 			},
@@ -203,12 +214,28 @@ func (r *ProjectServiceAccountResource) Delete(ctx context.Context, req resource
 	}
 }
 
+func (r *ProjectServiceAccountResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+	first, second, err := tfutils.SplitTwoPartId(req.ID, "project_id", "id")
+	if err != nil {
+		resp.Diagnostics.AddError("Invalid ID", fmt.Sprintf("Error parsing ID: %s", err.Error()))
+		return
+	}
+
+	resp.Diagnostics.Append(resp.State.SetAttribute(
+		ctx, path.Root("project_id"), first,
+	)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(
+		ctx, path.Root("id"), second,
+	)...)
+}
+
 type ProjectServiceAccountResourceModel struct {
-	ProjectId supertypes.StringValue `tfsdk:"project_id"`
-	Name      supertypes.StringValue `tfsdk:"name"`
-	Id        supertypes.StringValue `tfsdk:"id"`
-	Role      supertypes.StringValue `tfsdk:"role"`
-	CreatedAt supertypes.Int64Value  `tfsdk:"created_at"`
-	ApiKeyId  supertypes.StringValue `tfsdk:"api_key_id"`
-	ApiKey    supertypes.StringValue `tfsdk:"api_key"`
+	ProjectId                supertypes.StringValue `tfsdk:"project_id"`
+	Name                     supertypes.StringValue `tfsdk:"name"`
+	CreateServiceAccountOnly supertypes.BoolValue   `tfsdk:"create_service_account_only"`
+	Id                       supertypes.StringValue `tfsdk:"id"`
+	Role                     supertypes.StringValue `tfsdk:"role"`
+	CreatedAt                supertypes.Int64Value  `tfsdk:"created_at"`
+	ApiKeyId                 supertypes.StringValue `tfsdk:"api_key_id"`
+	ApiKey                   supertypes.StringValue `tfsdk:"api_key"`
 }

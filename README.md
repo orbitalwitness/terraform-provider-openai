@@ -57,3 +57,7 @@ _Note:_ Acceptance tests create real resources, and often cost money to run.
 ```shell
 make testacc
 ```
+
+## Runtime permissions
+
+See the [runtime identity permission guide](docs/guides/runtime-permissions.md) for supported controls, vendor limitations and a reusable environment-specific example.

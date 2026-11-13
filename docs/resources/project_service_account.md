@@ -33,8 +33,12 @@ output "service_account_api_key" {
 
 ### Required
 
-- `name` (String) The name of the service account being created.
+- `name` (String) The name of the service account. Updated in place.
 - `project_id` (String) The ID of the project.
+
+### Optional
+
+- `create_service_account_only` (Boolean) Create without default roles or an API key. Defaults to false for compatibility. Changing creation mode requires replacement. Refresh fails if a role-free account acquires a built-in role.
 
 ### Read-Only
 
@@ -42,4 +46,18 @@ output "service_account_api_key" {
 - `api_key_id` (String) Internal ID of the API key. This is a reference to the API key and not the actual key.
 - `created_at` (Number) The Unix timestamp (in seconds) of when the service account was created.
 - `id` (String) The ID of the service account.
-- `role` (String) The role of the service account. Can be `owner` or `member`.
+- `role` (String) The role of the service account. Can be `owner`, `member`, or `none`. Custom roles are managed separately.
+
+## Least-privilege runtime accounts
+
+Set `create_service_account_only = true` to create a keyless account with `role=none`, then grant a custom project role using the existing group membership and project group-role assignment resources. See the [runtime permissions guide](../guides/runtime-permissions.md) and [environment-independent example](../../examples/runtime-identity/main.tf).
+
+Name changes use the supported update API. The API cannot update an existing built-in role to `none`; opting an existing account into keyless creation requires replacement. Omitting the new argument preserves legacy state and key behaviour.
+
+## Import
+
+```shell
+terraform import openai_project_service_account.runtime '<project_id>/<service_account_id>'
+```
+
+Import reads identity metadata and infers creation mode from the built-in role; it cannot recover an existing API-key secret or adopt group/role resources automatically.

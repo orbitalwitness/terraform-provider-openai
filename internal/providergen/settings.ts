@@ -1737,6 +1737,7 @@ export const RESOURCES: Array<Resource> = [
       deleteMethod: "Delete",
       deleteRequestAttributes: ["project_id", "id"],
     },
+    importStateAttributes: ["project_id", "id"],
     attributes: [
       {
         name: "project_id",
@@ -1748,9 +1749,19 @@ export const RESOURCES: Array<Resource> = [
       {
         name: "name",
         type: "string",
-        description: "The name of the service account being created.",
+        description: "The name of the service account. Updated in place.",
         computedOptionalRequired: "required",
-        planModifiers: ["stringplanmodifier.RequiresReplace()"],
+      },
+      {
+        name: "create_service_account_only",
+        type: "bool",
+        description:
+          "Create without a default project role or API key. Defaults to false for compatibility. Changing this creation mode requires replacement; the API cannot update a built-in role to none. Refresh fails if a role-free account acquires a built-in role.",
+        computedOptionalRequired: "computed_optional",
+        planModifiers: [
+          "boolplanmodifier.UseStateForUnknown()",
+          "boolplanmodifier.RequiresReplace()",
+        ],
       },
       {
         name: "id",
@@ -1763,7 +1774,7 @@ export const RESOURCES: Array<Resource> = [
         name: "role",
         type: "string",
         description:
-          "The role of the service account. Can be `owner` or `member`.",
+          "The role of the service account. Can be `owner`, `member`, or `none`. Custom roles are managed separately.",
         computedOptionalRequired: "computed",
       },
       {
