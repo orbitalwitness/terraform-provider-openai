@@ -38,7 +38,7 @@ output "service_account_api_key" {
 
 ### Optional
 
-- `create_service_account_only` (Boolean) Create without default roles or an API key. Defaults to false for compatibility. Changing creation mode requires replacement. Refresh fails if a role-free account acquires a built-in role.
+- `create_service_account_only` (Boolean) Create without default roles or an API key. Defaults to false for compatibility. Existing built-in role grants must be removed before enabling the policy; existing keys are retained. Refresh fails if a role-free account acquires a built-in role.
 
 ### Read-Only
 
@@ -52,7 +52,7 @@ output "service_account_api_key" {
 
 Set `create_service_account_only = true` to create a keyless account with `role=none`, then grant a custom project role using the existing group membership and project group-role assignment resources. See the [runtime permissions guide](../guides/runtime-permissions.md) and [environment-independent example](../../examples/runtime-identity/main.tf).
 
-Name changes use the supported update API. The API cannot update an existing built-in role to `none`; opting an existing account into keyless creation requires replacement. Omitting the new argument preserves legacy state and key behaviour.
+Name changes use the supported update API. The API cannot update an existing built-in role to `none`; remove its built-in grant through the role-assignment API/resource before enabling role-free management. The provider blocks that policy change until the role is `none` and does not replace the account. Omitting the new argument preserves legacy state and key behaviour.
 
 ## Import
 

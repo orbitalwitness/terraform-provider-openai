@@ -1756,11 +1756,11 @@ export const RESOURCES: Array<Resource> = [
         name: "create_service_account_only",
         type: "bool",
         description:
-          "Create without a default project role or API key. Defaults to false for compatibility. Changing this creation mode requires replacement; the API cannot update a built-in role to none. Refresh fails if a role-free account acquires a built-in role.",
+          "Create without a default project role or API key. Defaults to false for compatibility. Existing accounts must have built-in role grants removed before enabling this policy; existing keys are retained. Refresh fails if a managed role-free account acquires a built-in role.",
         computedOptionalRequired: "computed_optional",
         planModifiers: [
           "boolplanmodifier.UseStateForUnknown()",
-          "boolplanmodifier.RequiresReplace()",
+          "serviceAccountOnlyPlanModifier{}",
         ],
       },
       {

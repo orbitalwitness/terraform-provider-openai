@@ -52,13 +52,13 @@ func (r *ProjectServiceAccountResource) Schema(ctx context.Context, req resource
 				CustomType:          supertypes.StringType{},
 			},
 			"create_service_account_only": schema.BoolAttribute{
-				MarkdownDescription: "Create without a default project role or API key. Defaults to false for compatibility. Changing this creation mode requires replacement; the API cannot update a built-in role to none. Refresh fails if a role-free account acquires a built-in role.",
+				MarkdownDescription: "Create without a default project role or API key. Defaults to false for compatibility. Existing accounts must have built-in role grants removed before enabling this policy; existing keys are retained. Refresh fails if a managed role-free account acquires a built-in role.",
 				Optional:            true,
 				Computed:            true,
 				CustomType:          supertypes.BoolType{},
 				PlanModifiers: []planmodifier.Bool{
 					boolplanmodifier.UseStateForUnknown(),
-					boolplanmodifier.RequiresReplace(),
+					serviceAccountOnlyPlanModifier{},
 				},
 			},
 			"id": schema.StringAttribute{

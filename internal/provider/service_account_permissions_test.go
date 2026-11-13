@@ -13,10 +13,10 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
 	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
-	"github.com/hashicorp/terraform-plugin-testing/plancheck"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
 	"github.com/openai/openai-go/v3"
 	supertypes "github.com/orange-cloudavenue/terraform-plugin-framework-supertypes"
+	"regexp"
 )
 
 func TestServiceAccountCreationMode(t *testing.T) {
@@ -26,7 +26,6 @@ func TestServiceAccountCreationMode(t *testing.T) {
 			var mu sync.Mutex
 			var account map[string]any
 			creates, deletes := 0, 0
-			expectedKeyless := keyless
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				mu.Lock()
 				defer mu.Unlock()
@@ -50,11 +49,11 @@ func TestServiceAccountCreationMode(t *testing.T) {
 					}
 					if strings.HasSuffix(r.URL.Path, "/service_accounts") {
 						creates++
-						if body["create_service_account_only"] != expectedKeyless {
+						if body["create_service_account_only"] != keyless {
 							t.Errorf("wrong creation mode: %v", body)
 						}
 						role := "member"
-						if expectedKeyless {
+						if keyless {
 							role = "none"
 						}
 						account = map[string]any{"id": "svc_test", "name": body["name"], "role": role, "created_at": 1, "object": "organization.project.service_account"}
@@ -62,7 +61,7 @@ func TestServiceAccountCreationMode(t *testing.T) {
 						for k, v := range account {
 							response[k] = v
 						}
-						if !expectedKeyless {
+						if !keyless {
 							response["api_key"] = map[string]any{"id": "key_test", "value": "sk-runtime-test", "name": "Secret Key", "created_at": 1, "object": "organization.project.service_account.api_key"}
 						} else {
 							response["api_key"] = nil
@@ -108,9 +107,14 @@ resource "openai_project_service_account" "runtime" {
 			}
 			rn := "openai_project_service_account.runtime"
 			check := resource.ComposeTestCheckFunc(resource.TestCheckResourceAttr(rn, "id", "svc_test"), resource.TestCheckResourceAttr(rn, "create_service_account_only", fmt.Sprint(keyless)))
+			checks := []resource.TestStep{}
+			if !keyless {
+				checks = append(checks, resource.TestStep{Config: strings.Replace(config("renamed"), "name = \"renamed\"", "name = \"renamed\"\n create_service_account_only = true", 1), PlanOnly: true, ExpectError: regexp.MustCompile("Remove built-in role assignments first")})
+			}
+
 			resource.UnitTest(t, resource.TestCase{
 				ProtoV6ProviderFactories: map[string]func() (tfprotov6.ProviderServer, error){"openai": providerserver.NewProtocol6WithError(New("test")())},
-				Steps: []resource.TestStep{
+				Steps: append([]resource.TestStep{
 					{Config: config("runtime"), Check: resource.ComposeTestCheckFunc(check, func(s *terraform.State) error {
 						attrs := s.RootModule().Resources[rn].Primary.Attributes
 						if keyless && (attrs["api_key"] != "" || attrs["api_key_id"] != "" || attrs["role"] != "none") {
@@ -125,11 +129,12 @@ resource "openai_project_service_account" "runtime" {
 					{ResourceName: rn, ImportState: true, ImportStateId: "proj_test/svc_test", ImportStateVerify: true, ImportStateVerifyIgnore: []string{"api_key", "api_key_id"}},
 					{PreConfig: func() { mu.Lock(); account["name"] = "external-change"; mu.Unlock() }, Config: config("renamed"), PlanOnly: true, ExpectNonEmptyPlan: true},
 					{Config: config("renamed"), Check: resource.TestCheckResourceAttr(rn, "name", "renamed")},
-					{Config: strings.Replace(strings.ReplaceAll(config("renamed"), "create_service_account_only = true", ""), "name = \"renamed\"", fmt.Sprintf("name = \"renamed\"\n create_service_account_only = %t", !keyless), 1), PreConfig: func() { mu.Lock(); expectedKeyless = !keyless; mu.Unlock() }, ConfigPlanChecks: resource.ConfigPlanChecks{PreApply: []plancheck.PlanCheck{plancheck.ExpectResourceAction(rn, plancheck.ResourceActionDestroyBeforeCreate)}}},
+				}, append(checks, []resource.TestStep{
+					{PreConfig: func() { mu.Lock(); account["role"] = "none"; mu.Unlock() }, Config: strings.Replace(strings.ReplaceAll(config("renamed"), "create_service_account_only = true", ""), "name = \"renamed\"", "name = \"renamed\"\n create_service_account_only = true", 1), Check: resource.TestCheckResourceAttr(rn, "create_service_account_only", "true")},
 					{PreConfig: func() { mu.Lock(); account = nil; mu.Unlock() }, Config: config("renamed"), PlanOnly: true, ExpectNonEmptyPlan: true},
-				},
+				}...)...),
 			})
-			if creates != 2 || deletes != 2 {
+			if creates != 1 || deletes != 1 {
 				t.Errorf("rename/import/drift unexpectedly replaced account: creates=%d deletes=%d", creates, deletes)
 			}
 		})

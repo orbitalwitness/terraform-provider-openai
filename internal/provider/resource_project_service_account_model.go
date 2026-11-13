@@ -5,6 +5,8 @@ import (
 	"fmt"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/path"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/openai/openai-go/v3"
 	supertypes "github.com/orange-cloudavenue/terraform-plugin-framework-supertypes"
 )
@@ -62,4 +64,24 @@ func (m *ProjectServiceAccountResourceModel) checkDefaultRole() diag.Diagnostics
 		diags.AddError("Unexpected built-in service-account role", "This account is managed without default roles but the API reports a built-in role. Stop rollout and reconcile its role assignments. The service-account update API cannot set role=none; the provider will not silently retain broader access or delete the account.")
 	}
 	return diags
+}
+
+// The creation endpoint can omit default grants; existing grants have their own API.
+type serviceAccountOnlyPlanModifier struct{}
+
+func (serviceAccountOnlyPlanModifier) Description(context.Context) string {
+	return "Existing accounts must have no built-in role before enabling role-free management."
+}
+func (m serviceAccountOnlyPlanModifier) MarkdownDescription(ctx context.Context) string {
+	return m.Description(ctx)
+}
+func (serviceAccountOnlyPlanModifier) PlanModifyBool(ctx context.Context, req planmodifier.BoolRequest, resp *planmodifier.BoolResponse) {
+	if req.State.Raw.IsNull() || !req.PlanValue.ValueBool() {
+		return
+	}
+	var role supertypes.StringValue
+	resp.Diagnostics.Append(req.State.GetAttribute(ctx, path.Root("role"), &role)...)
+	if !role.IsNull() && !role.IsUnknown() && role.ValueString() != "none" {
+		resp.Diagnostics.AddAttributeError(req.Path, "Remove built-in role assignments first", "The account update endpoint cannot set role=none. Review and remove the existing default project role using its role-assignment resource/API, refresh, and then enable create_service_account_only. The provider will not replace the account or revoke existing keys automatically.")
+	}
 }
