@@ -14,7 +14,9 @@ import (
 )
 
 // Server serves one collection: GET and POST on the list path, and GET, POST
-// and DELETE on list path + "/{id}". It records how reads reached it.
+// and DELETE on list path + "/{id}". Lists are paged by pageSize items with an
+// "after" cursor, so reads must follow pagination. It records how reads
+// reached it.
 type Server struct {
 	URL string
 
@@ -24,6 +26,7 @@ type Server struct {
 	items      []map[string]any
 	nextID     int
 	listCalls  int
+	listPages  int
 	itemGets   int
 	unexpected []string
 }
@@ -47,8 +50,7 @@ func (s *Server) handle(w http.ResponseWriter, req *http.Request) {
 	if req.URL.Path == s.listPath {
 		switch req.Method {
 		case http.MethodGet:
-			s.listCalls++
-			s.write(w, map[string]any{"object": "list", "data": s.items, "has_more": false})
+			s.list(w, req)
 		case http.MethodPost:
 			body, ok := s.decode(w, req)
 			if !ok {
@@ -95,6 +97,30 @@ func (s *Server) handle(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
+const pageSize = 2
+
+func (s *Server) list(w http.ResponseWriter, req *http.Request) {
+	start := 0
+	if after := req.URL.Query().Get("after"); after != "" {
+		index := s.index(after)
+		if index < 0 {
+			http.Error(w, "unknown cursor", http.StatusBadRequest)
+			return
+		}
+		start = index + 1
+	} else {
+		s.listCalls++
+	}
+	s.listPages++
+	end := min(start+pageSize, len(s.items))
+	page := s.items[start:end]
+	response := map[string]any{"object": "list", "data": page, "has_more": end < len(s.items)}
+	if len(page) > 0 {
+		response["first_id"], response["last_id"] = page[0]["id"], page[len(page)-1]["id"]
+	}
+	s.write(w, response)
+}
+
 func (s *Server) index(id string) int {
 	for i, item := range s.items {
 		if item["id"] == id {
@@ -133,11 +159,12 @@ func (s *Server) DeleteFirst() {
 func (s *Server) ResetCounts() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.listCalls, s.itemGets = 0, 0
+	s.listCalls, s.listPages, s.itemGets = 0, 0, 0
 }
 
 // CheckReads fails the test if any read used a single-item GET, if more than
-// maxListCalls list requests were made, or if an unexpected request arrived.
+// maxListCalls list scans were made, if no scan followed a second page, or if
+// an unexpected request arrived.
 func (s *Server) CheckReads(maxListCalls int) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -148,7 +175,10 @@ func (s *Server) CheckReads(maxListCalls int) error {
 		return fmt.Errorf("expected reads from the list, got %d single-item GETs", s.itemGets)
 	}
 	if s.listCalls == 0 || s.listCalls > maxListCalls {
-		return fmt.Errorf("expected 1-%d list requests, got %d", maxListCalls, s.listCalls)
+		return fmt.Errorf("expected 1-%d list scans, got %d", maxListCalls, s.listCalls)
+	}
+	if s.listPages <= s.listCalls {
+		return fmt.Errorf("expected list scans to follow pagination, got %d pages for %d scans", s.listPages, s.listCalls)
 	}
 	return nil
 }
