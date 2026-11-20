@@ -110,7 +110,15 @@ func (r *GroupUserResource) Create(ctx context.Context, req resource.CreateReque
 	queryParams := map[string]string{}
 	body := map[string]any{}
 	openaiapi.AddStringBodyField(body, "user_id", data.UserID)
+	if err := r.client.InvalidateResponseCache("group_users", []string{"group_id"}, pathParams); err != nil {
+		resp.Diagnostics.AddError("Invalid response cache key", err.Error())
+		return
+	}
 	responseData, err := r.client.Request(ctx, "POST", "/organization/groups/{group_id}/users", pathParams, queryParams, body)
+	if err := r.client.InvalidateResponseCache("group_users", []string{"group_id"}, pathParams); err != nil {
+		resp.Diagnostics.AddError("Invalid response cache key", err.Error())
+		return
+	}
 	if err != nil {
 		resp.Diagnostics.AddError("OpenAI API request failed", err.Error())
 		return
@@ -136,8 +144,10 @@ func (r *GroupUserResource) Read(ctx context.Context, req resource.ReadRequest, 
 		"group_id": data.GroupID.ValueString(),
 		"user_id":  data.UserID.ValueString(),
 	}
-	queryParams := map[string]string{}
-	responseData, err := r.client.Request(ctx, "GET", "/organization/groups/{group_id}/users/{user_id}", pathParams, queryParams, nil)
+	queryParams := map[string]string{
+		"limit": "100",
+	}
+	responseData, err := r.client.CachedPaginatedRequest(ctx, "group_users", []string{"group_id"}, "GET", "/organization/groups/{group_id}/users", pathParams, queryParams)
 	if err != nil {
 		if openaiapi.IsNotFound(err) {
 			resp.State.RemoveResource(ctx)
@@ -146,6 +156,16 @@ func (r *GroupUserResource) Read(ctx context.Context, req resource.ReadRequest, 
 		resp.Diagnostics.AddError("OpenAI API request failed", err.Error())
 		return
 	}
+	selectedResponseData, found, err := openaiapi.ResponseObjectByField(responseData, "data", "id", data.UserID.ValueString())
+	if err != nil {
+		resp.Diagnostics.AddError("Invalid OpenAI API response", err.Error())
+		return
+	}
+	if !found {
+		resp.State.RemoveResource(ctx)
+		return
+	}
+	responseData = selectedResponseData
 	if err := openaiapi.ApplyStringResponseField(responseData, []string{"id", "user_id"}, &data.UserID, true); err != nil {
 		resp.Diagnostics.AddError("Invalid OpenAI API response", err.Error())
 		return
@@ -182,7 +202,15 @@ func (r *GroupUserResource) Delete(ctx context.Context, req resource.DeleteReque
 		"user_id":  data.UserID.ValueString(),
 	}
 	queryParams := map[string]string{}
+	if err := r.client.InvalidateResponseCache("group_users", []string{"group_id"}, pathParams); err != nil {
+		resp.Diagnostics.AddError("Invalid response cache key", err.Error())
+		return
+	}
 	responseData, err := r.client.Request(ctx, "DELETE", "/organization/groups/{group_id}/users/{user_id}", pathParams, queryParams, nil)
+	if err := r.client.InvalidateResponseCache("group_users", []string{"group_id"}, pathParams); err != nil {
+		resp.Diagnostics.AddError("Invalid response cache key", err.Error())
+		return
+	}
 	if err != nil {
 		if openaiapi.IsNotFound(err) {
 			resp.State.RemoveResource(ctx)

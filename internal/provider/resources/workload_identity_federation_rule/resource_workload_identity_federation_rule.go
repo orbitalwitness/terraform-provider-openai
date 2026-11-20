@@ -260,7 +260,15 @@ func (r *WorkloadIdentityFederationRuleResource) Create(ctx context.Context, req
 		openaiapi.SetBodyField(body, []string{"permissions"}, value)
 	}
 	openaiapi.AddBoolBodyField(body, "enabled", data.Enabled)
+	if err := r.client.InvalidateResponseCache("workload_identity_federation_rules", []string{"workload_identity_provider_id"}, pathParams); err != nil {
+		resp.Diagnostics.AddError("Invalid response cache key", err.Error())
+		return
+	}
 	responseData, err := r.client.RequestWithoutRetries(openaiapi.WithExactResponseNumbers(ctx), "POST", "/organization/workload_identity_providers/{workload_identity_provider_id}/federation_rules", pathParams, queryParams, body)
+	if err := r.client.InvalidateResponseCache("workload_identity_federation_rules", []string{"workload_identity_provider_id"}, pathParams); err != nil {
+		resp.Diagnostics.AddError("Invalid response cache key", err.Error())
+		return
+	}
 	if err != nil {
 		resp.Diagnostics.AddError("OpenAI API request failed", err.Error())
 		return
@@ -330,8 +338,10 @@ func (r *WorkloadIdentityFederationRuleResource) Read(ctx context.Context, req r
 		"workload_identity_provider_id":        data.WorkloadIDentityProviderID.ValueString(),
 		"workload_identity_federation_rule_id": data.WorkloadIDentityFederationRuleID.ValueString(),
 	}
-	queryParams := map[string]string{}
-	responseData, err := r.client.Request(openaiapi.WithExactResponseNumbers(ctx), "GET", "/organization/workload_identity_providers/{workload_identity_provider_id}/federation_rules/{workload_identity_federation_rule_id}", pathParams, queryParams, nil)
+	queryParams := map[string]string{
+		"limit": "100",
+	}
+	responseData, err := r.client.CachedPaginatedRequest(openaiapi.WithExactResponseNumbers(ctx), "workload_identity_federation_rules", []string{"workload_identity_provider_id"}, "GET", "/organization/workload_identity_providers/{workload_identity_provider_id}/federation_rules", pathParams, queryParams)
 	if err != nil {
 		if openaiapi.IsNotFound(err) {
 			resp.State.RemoveResource(ctx)
@@ -340,6 +350,16 @@ func (r *WorkloadIdentityFederationRuleResource) Read(ctx context.Context, req r
 		resp.Diagnostics.AddError("OpenAI API request failed", err.Error())
 		return
 	}
+	selectedResponseData, found, err := openaiapi.ResponseObjectByField(responseData, "data", "id", data.WorkloadIDentityFederationRuleID.ValueString())
+	if err != nil {
+		resp.Diagnostics.AddError("Invalid OpenAI API response", err.Error())
+		return
+	}
+	if !found {
+		resp.State.RemoveResource(ctx)
+		return
+	}
+	responseData = selectedResponseData
 	if err := openaiapi.ApplyStringResponseField(responseData, []string{"workload_identity_provider_id"}, &data.WorkloadIDentityProviderID, false); err != nil {
 		resp.Diagnostics.AddError("Invalid OpenAI API response", err.Error())
 		return
@@ -431,7 +451,15 @@ func (r *WorkloadIdentityFederationRuleResource) Update(ctx context.Context, req
 		openaiapi.SetBodyField(body, []string{"permissions"}, value)
 	}
 	openaiapi.AddBoolBodyField(body, "enabled", data.Enabled)
+	if err := r.client.InvalidateResponseCache("workload_identity_federation_rules", []string{"workload_identity_provider_id"}, pathParams); err != nil {
+		resp.Diagnostics.AddError("Invalid response cache key", err.Error())
+		return
+	}
 	responseData, err := r.client.Request(openaiapi.WithExactResponseNumbers(ctx), "POST", "/organization/workload_identity_providers/{workload_identity_provider_id}/federation_rules/{workload_identity_federation_rule_id}", pathParams, queryParams, body)
+	if err := r.client.InvalidateResponseCache("workload_identity_federation_rules", []string{"workload_identity_provider_id"}, pathParams); err != nil {
+		resp.Diagnostics.AddError("Invalid response cache key", err.Error())
+		return
+	}
 	if err != nil {
 		resp.Diagnostics.AddError("OpenAI API request failed", err.Error())
 		return
@@ -502,7 +530,15 @@ func (r *WorkloadIdentityFederationRuleResource) Delete(ctx context.Context, req
 		"workload_identity_federation_rule_id": data.WorkloadIDentityFederationRuleID.ValueString(),
 	}
 	queryParams := map[string]string{}
+	if err := r.client.InvalidateResponseCache("workload_identity_federation_rules", []string{"workload_identity_provider_id"}, pathParams); err != nil {
+		resp.Diagnostics.AddError("Invalid response cache key", err.Error())
+		return
+	}
 	responseData, err := r.client.Request(ctx, "DELETE", "/organization/workload_identity_providers/{workload_identity_provider_id}/federation_rules/{workload_identity_federation_rule_id}", pathParams, queryParams, nil)
+	if err := r.client.InvalidateResponseCache("workload_identity_federation_rules", []string{"workload_identity_provider_id"}, pathParams); err != nil {
+		resp.Diagnostics.AddError("Invalid response cache key", err.Error())
+		return
+	}
 	if err != nil {
 		if openaiapi.IsNotFound(err) {
 			resp.State.RemoveResource(ctx)
