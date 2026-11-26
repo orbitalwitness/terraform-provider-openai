@@ -33,6 +33,14 @@ type ProjectServiceAccountResourceModel struct {
 	CreatedAt        types.Int64  `tfsdk:"created_at"`
 }
 
+// State written by providers that stored only `id` has no service_account_id.
+func (m ProjectServiceAccountResourceModel) serviceAccountID() string {
+	if id := m.ServiceAccountID.ValueString(); id != "" {
+		return id
+	}
+	return m.ID.ValueString()
+}
+
 func NewProjectServiceAccountResource() resource.Resource {
 	return &ProjectServiceAccountResource{}
 }
@@ -185,9 +193,9 @@ func (r *ProjectServiceAccountResource) Read(ctx context.Context, req resource.R
 		resp.Diagnostics.AddError("Missing OpenAI API client", "The provider was not configured before this operation ran.")
 		return
 	}
+	serviceAccountID := data.serviceAccountID()
 	pathParams := map[string]string{
-		"project_id":         data.ProjectID.ValueString(),
-		"service_account_id": data.ServiceAccountID.ValueString(),
+		"project_id": data.ProjectID.ValueString(),
 	}
 	queryParams := map[string]string{
 		"limit": "100",
@@ -201,7 +209,7 @@ func (r *ProjectServiceAccountResource) Read(ctx context.Context, req resource.R
 		resp.Diagnostics.AddError("OpenAI API request failed", err.Error())
 		return
 	}
-	selectedResponseData, found, err := openaiapi.ResponseObjectByField(responseData, "data", "id", data.ServiceAccountID.ValueString())
+	selectedResponseData, found, err := openaiapi.ResponseObjectByField(responseData, "data", "id", serviceAccountID)
 	if err != nil {
 		resp.Diagnostics.AddError("Invalid OpenAI API response", err.Error())
 		return
@@ -256,7 +264,7 @@ func (r *ProjectServiceAccountResource) Delete(ctx context.Context, req resource
 	}
 	pathParams := map[string]string{
 		"project_id":         data.ProjectID.ValueString(),
-		"service_account_id": data.ServiceAccountID.ValueString(),
+		"service_account_id": data.serviceAccountID(),
 	}
 	queryParams := map[string]string{}
 	if err := r.client.InvalidateResponseCache("project_service_accounts", []string{"project_id"}, pathParams); err != nil {
