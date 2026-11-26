@@ -36,6 +36,14 @@ type ProjectResourceModel struct {
 	Status        types.String `tfsdk:"status"`
 }
 
+// State written by providers that stored only `id` has no project_id.
+func (m ProjectResourceModel) projectID() string {
+	if id := m.ProjectID.ValueString(); id != "" {
+		return id
+	}
+	return m.ID.ValueString()
+}
+
 func NewProjectResource() resource.Resource {
 	return &ProjectResource{}
 }
@@ -227,7 +235,7 @@ func (r *ProjectResource) Read(ctx context.Context, req resource.ReadRequest, re
 		resp.Diagnostics.AddError("OpenAI API request failed", err.Error())
 		return
 	}
-	selectedResponseData, found, err := openaiapi.ResponseObjectByField(responseData, "data", "id", data.ProjectID.ValueString())
+	selectedResponseData, found, err := openaiapi.ResponseObjectByField(responseData, "data", "id", data.projectID())
 	if err != nil {
 		resp.Diagnostics.AddError("Invalid OpenAI API response", err.Error())
 		return
@@ -346,7 +354,7 @@ func (r *ProjectResource) Delete(ctx context.Context, req resource.DeleteRequest
 		return
 	}
 	pathParams := map[string]string{
-		"project_id": data.ProjectID.ValueString(),
+		"project_id": data.projectID(),
 	}
 	queryParams := map[string]string{}
 	if err := r.client.InvalidateResponseCache("organization_projects", []string{}, pathParams); err != nil {
